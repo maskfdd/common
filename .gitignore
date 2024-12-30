@@ -1,5 +1,6 @@
 .uptodate
 .pkg
+.idea
 /common-build/.src
 vendor
 server/certs/*.key

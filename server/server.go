@@ -61,6 +61,7 @@ type TLSConfig struct {
 // Config for a Server
 type Config struct {
 	MetricsNamespace  string `yaml:"-"`
+	PprofEnabled      bool   `yaml:"pprof_enabled"`
 	HTTPListenNetwork string `yaml:"http_listen_network"`
 	HTTPListenAddress string `yaml:"http_listen_address"`
 	HTTPListenPort    int    `yaml:"http_listen_port"`
@@ -122,6 +123,7 @@ var infinty = time.Duration(math.MaxInt64)
 
 // RegisterFlags adds the flags required to config this to the given FlagSet
 func (cfg *Config) RegisterFlags(f *flag.FlagSet) {
+	f.BoolVar(&cfg.PprofEnabled, "server.pprof-enabled", false, "Enable pprof endpoints.")
 	f.StringVar(&cfg.HTTPListenAddress, "server.http-listen-address", "", "HTTP server listen address.")
 	f.StringVar(&cfg.HTTPListenNetwork, "server.http-listen-network", DefaultNetwork, "HTTP server listen network, default tcp")
 	f.StringVar(&cfg.HTTPTLSConfig.TLSCertPath, "server.http-tls-cert-path", "", "HTTP server cert path.")
@@ -372,7 +374,7 @@ func New(cfg Config) (*Server, error) {
 		router = router.PathPrefix(cfg.PathPrefix).Subrouter()
 	}
 	if cfg.RegisterInstrumentation {
-		RegisterInstrumentationWithGatherer(router, gatherer)
+		RegisterInstrumentationWithGatherer(router, gatherer, cfg.PprofEnabled)
 	}
 
 	var sourceIPs *middleware.SourceIPExtractor
@@ -440,15 +442,17 @@ func New(cfg Config) (*Server, error) {
 
 // RegisterInstrumentation on the given router.
 func RegisterInstrumentation(router *mux.Router) {
-	RegisterInstrumentationWithGatherer(router, prometheus.DefaultGatherer)
+	RegisterInstrumentationWithGatherer(router, prometheus.DefaultGatherer, false)
 }
 
 // RegisterInstrumentationWithGatherer on the given router.
-func RegisterInstrumentationWithGatherer(router *mux.Router, gatherer prometheus.Gatherer) {
+func RegisterInstrumentationWithGatherer(router *mux.Router, gatherer prometheus.Gatherer, pprofEnabled bool) {
 	router.Handle("/metrics", promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{
 		EnableOpenMetrics: true,
 	}))
-	router.PathPrefix("/debug/pprof").Handler(http.DefaultServeMux)
+	if pprofEnabled {
+		router.PathPrefix("/debug/pprof").Handler(http.DefaultServeMux)
+	}
 }
 
 // Run the server; blocks until SIGTERM (if signal handling is enabled), an error is received, or Stop() is called.
